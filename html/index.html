@@ -1,0 +1,339 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset='utf-8' />
+	<meta name='viewport' content='width=device-width, initial-scale=1' />
+
+	<!-- ******* TITLE OF PAGE ******** -->
+
+	<title>Okta demo: {{txt_brand}}</title>
+
+	<!-- ******* CSS *******************-->
+
+	<!-- Okta widget css -->
+	<link rel='stylesheet' href='https://global.oktacdn.com/okta-signin-widget/3.2.0/css/okta-sign-in.min.css' type='text/css' />
+
+	<!-- Font awesome css -->
+	<link
+		rel='stylesheet'
+		href='https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css'
+		type='text/css'
+		integrity='sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN'
+		crossorigin='anonymous'>
+
+	<!-- Bootstrap css -->
+	<link rel='stylesheet' href='/css/mainCSS.css' type='text/css' />
+
+	<!-- Misc css -->
+	<link rel='stylesheet' href='/css/misc.css' type='text/css' />
+
+	<!-- ******* JAVASCRIPT *******************-->
+
+	<!-- JQuery -->
+	<script src='https://code.jquery.com/jquery-3.4.1.min.js'></script>
+
+	<!-- Okta widget -->
+	<script src='https://global.oktacdn.com/okta-signin-widget/3.2.0/js/okta-sign-in.min.js'></script>
+
+	<!-- *** Initialize the Okta widget ***** -->
+
+	<script>
+
+	var oktaSignIn = new OktaSignIn({
+		baseUrl: '{{okta_tenant}}',
+		logo: '{{img_logo_url}}',
+		features: {
+			multiOptionalFactorEnroll: true,
+			smsRecovery: true
+		},
+
+		// OIDC options
+		clientId: '{{okta_client_id}}',
+		redirectUri: '{{REDIRECT_URI}}',
+
+		authScheme: 'OAUTH2',
+		authParams: {
+			issuer: '{{okta_issuer}}',
+			responseType: ['id_token', 'token'],
+			responseMode: 'fragment',
+			scopes: [
+				'openid',
+				'email',
+				'profile',
+				'address',
+				'phone'
+			],
+			// pkce: true
+		},
+
+		features: {
+			registration:true
+		},
+
+		idpDisplay: 'PRIMARY',
+		idps: [
+			{"type":"FACEBOOK","id":"0oa1w1pmezuPUbhoE1t6"},
+			{"type":"GOOGLE","id":"0oa1w8n4dlYlOLjPl1t6"}
+		]
+	})
+
+	// Check for Okta seesion on page load
+	window.onload = function() {
+
+		getDate() // just UI candy
+
+		console.log("checking for Okta session...");
+
+		oktaSignIn.authClient.session.exists()
+		.then(function(exists) {
+			if (exists) {
+				console.log("there is an active session.")
+				console.log("---------------------------")
+				setMenu("authenticated")
+			}
+			else {
+				console.log("no Okta session found.")
+				setMenu("anon")
+				$("#oktaWidget").hide()
+				renderWidget()
+			}
+		})
+	}
+
+	// Render the Okta widget
+	function renderWidget() {
+		oktaSignIn.renderEl(
+			{ el: '#oktaWidget'},
+			function (res) {
+
+				console.log("the result object is: ")
+
+				console.dir(res)
+
+				if (res.status == "SUCCESS") {
+
+					$("#oktaWidget").hide()
+
+					console.log("authentication successful.")
+					console.log("user now has an Okta session.")
+
+					oktaSignIn.authClient.tokenManager.add('id_token', res[0])
+					oktaSignIn.authClient.tokenManager.add('access_token', res[1])
+
+					localStorage.setItem("given_name", res[0].claims.name)
+
+					setMenu("authenticated")
+				}
+				else {
+					console.log("the user was not authenticated.");
+					console.log("the error is: " + res.status);
+				}
+			}
+		)
+	}
+
+	</script>
+
+	<script>
+	// Misc UI scripts
+
+	function hideWidget() {
+		$("#oktaWidget").hide();
+		$("#login").attr("onclick", "showWidget()");
+	}
+
+	function setMenu(authState) {
+
+		var menu = "";
+
+		if (authState == "authenticated") {
+			menu = "<li><a href = '#' onclick = 'signout()'>Log out</a></li>";
+
+			if (localStorage.getItem("given_name")) {
+				menu += "<li><a href='#'>Welcome, " + localStorage.getItem("given_name") + "!</a></li>";
+			}
+		}
+		else {
+			menu = "<li><a href = '#' id = 'login' onclick = 'showWidget()'>Log in / Register</a></li>"
+		}
+		$("#authLinks").html(menu)
+	}
+
+	function showWidget() {
+		$("#oktaWidget").show();
+		$("#login").attr("onclick", "hideWidget()")
+	}
+
+	function signout() {
+		console.log("attempting to sign out...")
+
+		$.ajax({
+			type: "DELETE",
+			dataType: 'json',
+			url: "{{okta_tenant}}/api/v1/sessions/me",
+			xhrFields: {
+				withCredentials: true
+			},
+			success: function (data) {
+				localStorage.clear()
+				location.reload()
+			},
+			error: function (textStatus, errorThrown) {
+				console.log('error deleting session: ' + JSON.stringify(textStatus))
+				console.log(errorThrown)
+
+				localStorage.clear()
+
+				setTimeout(function() {
+					location.reload()
+				}, (5 * 1000))
+			},
+			async: true
+		})
+	}
+
+	</script>
+
+	<script src='/javascript/ui/dates.js'></script>
+
+	<script src='/javascript/ui/skel.min.js'></script>
+
+	<script src='/javascript/ui/main.js'></script>
+
+	<script src='/javascript/ui/util.js'></script>
+
+</head>
+
+<body>
+
+<!-- Wrapper -->
+
+<div id="wrapper">
+
+	<!-- Header -->
+
+	<header id="header">
+
+		<h1><a href="/">{{txt_brand}}</a></h1>
+
+		<nav class="links">
+			<ul id = "authLinks"></ul>
+		</nav>
+
+		<nav class="main">
+			<ul>
+				<li class = "menu"><a class="fa-bars" href = "#menu">Menu</a></li>
+			</ul>
+		</nav>
+
+	</header>
+
+	<!-- Menu -->
+	<section id="menu">
+
+		<!-- Links -->
+		<section>
+			<ul class="links">
+				<li>
+					<a href="/">
+						<h3>Home</h3>
+					</a>
+				</li>
+				<li>
+					<a href="/settings" target="_blank">
+						<h3>settings</h3>
+					</a>
+				</li>
+			</ul>
+		</section>
+	</section>
+
+	<!-- Main -->
+	<div id="main">
+
+		<div class="links" id = "myApps"></div>
+
+		<div id="container">
+			<div id="oktaWidget"></div>
+		</div>
+
+		<article class="post">
+			<header>
+				<div class="title">
+					<h2><a href="#">{{txt_headline}}</a></h2>
+					<p>{{txt_detail}}</p>
+				</div>
+				
+				<div class="meta">
+					<time class="published"></time>
+				</div>
+			</header>
+
+			<a href="#" class="image featured">
+				<img src="{{img_main_url}}" alt="" />
+			</a>
+
+			<footer>
+				<ul class="actions">
+					<li><a href="#" class="button big">Continue</a></li>
+				</ul>
+				<ul class="stats">
+					<li><a href="#">General</a></li>
+					<li><a href="#" class="icon fa-heart">28</a></li>
+					<li><a href="#" class="icon fa-comment">128</a></li>
+				</ul>
+			</footer>
+		</article>
+
+	</div> <!--Main-->
+
+	<!-- Sidebar -->
+	<section id="sidebar">
+
+		<!-- Intro -->
+		<section id="intro">
+			<a href="#" class="logo">
+				<img src="{{img_logo_url}}" alt="" />
+			</a>
+
+			<header>
+				<h2>{{txt_brand}}</h2>
+				<p>{{txt_tagline}}</p>
+			</header>
+		</section>
+
+		<!-- Mini Posts -->
+		<section>
+			<div class="mini-posts">
+
+				<!-- Mini Post -->
+				<article class="mini-post">
+					<header>
+						<h3><a href="#">{{txt_minor_headline}}</a></h3>
+						<time class="published"></time>
+						<a href="#" class="author"><img src="{{img_minor_url}}" alt="" /></a>
+					</header>
+					<a href="#" class="image"><img src="{{img_minor_url}}" alt="" /></a>
+				</article>
+
+			</div>
+		</section>
+
+		<!-- Footer -->
+		<section id="footer">
+			<ul class="icons">
+				<li><a href="#" class="fa-twitter"><span class="label">Twitter</span></a></li>
+				<li><a href="#" class="fa-facebook"><span class="label">Facebook</span></a></li>
+				<li><a href="#" class="fa-instagram"><span class="label">Instagram</span></a></li>
+				<li><a href="#" class="fa-rss"><span class="label">RSS</span></a></li>
+				<li><a href="#" class="fa-envelope"><span class="label">Email</span></a></li>
+			</ul>
+			<p class="copyright">&copy; Okta. Design: <a href="http://html5up.net">HTML5 UP</a>. Images: <a href="http://unsplash.com">Unsplash</a>.</p>
+		</section>
+
+	</div>
+
+</div>
+
+</body>
+</html>
